@@ -29,8 +29,9 @@ def _get_orbitals(fixed_params):
     else:
         raise ValueError("No orbitals found for pretrianing in fixed params")
 
-def build_pretraining_loss_func(orbital_func, pretrain_config, model_config):
-    def loss_func(params, batch, spin_state):
+def build_pretraining_loss_func(orbital_func, pretrain_config, model_config, phys_config):
+    spin_state = (phys_config.n_up, phys_config.n_dn)
+    def loss_func(params, batch):
         r, R, Z, fixed_params = batch
         n_up, n_dn = spin_state
 
@@ -104,7 +105,7 @@ def pretrain_orbitals(
         fixed_params["pretrain_orbitals"], (E_hf, E_casscf) = get_baseline_solution(phys_config, pretrain_config.baseline, n_determinants)
         LOGGER.debug(f"Finished baseline calculation for pretraining: E_HF = {E_hf:.6f}, E_casscf={E_casscf:.6f}")
 
-    loss_func = build_pretraining_loss_func(orbital_func, pretrain_config, model_config)
+    loss_func = build_pretraining_loss_func(orbital_func, pretrain_config, model_config, phys_config)
     log_psi_squared_func = build_log_psi_sqr_func_for_sampling(orbital_func, pretrain_config, model_config)
 
     # Init MCMC

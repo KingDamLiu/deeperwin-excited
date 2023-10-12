@@ -149,7 +149,9 @@ class BaselineOrbitals(hk.Module):
         dist_el_el = jnp.linalg.norm(diff_el_el, axis=-1)
         diff_el_ion = diff_dist.diff_el_ion + shift[..., :, None, :]
         dist_el_ion = jnp.linalg.norm(diff_el_ion, axis=-1)
-        return DiffAndDistances(diff_el_el, dist_el_el, diff_el_ion, dist_el_ion)
+        diff_ion_ion, dist_ion_ion = diff_dist.diff_ion_ion, diff_dist.dist_ion_ion
+
+        return DiffAndDistances(diff_el_el, dist_el_el, diff_el_ion, dist_el_ion, diff_ion_ion, dist_ion_ion)
 
 
     def _calc_shift(self, x, pair_embedding, diff, dist, name="el"):

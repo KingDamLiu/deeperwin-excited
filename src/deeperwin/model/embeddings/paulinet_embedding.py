@@ -37,7 +37,7 @@ class PauliNetEmbedding(hk.Module):
 
         h_ion_mapped = MLP([self.config.embedding_dim], self.mlp_config, name="h_ion_map")(h_ion)
 
-        f_pairs_same, f_pairs_diff = self._split_into_same_diff(h_el_el)
+        f_pairs_same, f_pairs_diff = self._split_into_same_diff(h_el_el, n_up)
 
         n_el = h_el_el.shape[-3] # [batch x n_el x n_el x features]
         n_dn = n_el - n_up

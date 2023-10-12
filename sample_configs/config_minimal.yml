@@ -1,8 +1,10 @@
 physical:
   R: [[0,0,0]]
-  Z: [4]
-  n_electrons: 4
-  n_up: 2
+  Z: [5]
+  n_electrons: 5
+  n_cas_electrons: 3
+  n_cas_orbitals: 2
+  n_up: 3
 
 pre_training:
   use: true
@@ -20,8 +22,8 @@ evaluation:
 
 model:
   orbitals:
-    n_determinants: 16
-  name: dpe1
+    n_determinants: 2
+  name: dpe4 # paulinet必须要casscf组态个数与n_determinants相等
 
 logging:
   tags: []

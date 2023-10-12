@@ -73,7 +73,7 @@ def optimize_wavefunction(
                                                     fixed_params, split_mcmc=True, merge_mcmc=False, mode="burnin")
 
     # Initialize loss and optimizer
-    optimizer = build_optimizer(value_and_grad_func=build_value_and_grad_func(log_psi_squared, opt_config.clipping), 
+    optimizer = build_optimizer(value_and_grad_func=build_value_and_grad_func(log_psi_squared, opt_config.clipping, phys_config), 
                                 opt_config=opt_config.optimizer, 
                                 value_func_has_aux=True, 
                                 value_func_has_state=True,
@@ -81,7 +81,7 @@ def optimize_wavefunction(
     opt_state = initial_opt_state or optimizer.init(params=params, 
                                                     rng=rng_opt, 
                                                     batch=mcmc_state.build_batch(fixed_params),
-                                                    static_args=spin_state, 
+                                                    # static_args=spin_state, 
                                                     func_state=clipping_state)
 
     # Set-up check-points
@@ -113,7 +113,7 @@ def optimize_wavefunction(
                                                         mode="intersteps")
         params, opt_state, clipping_state, stats = optimizer.step(params=params,
                                                                   state=opt_state,
-                                                                  static_args=spin_state,
+                                                                #   static_args=spin_state,
                                                                   rng=rng_opt,
                                                                   batch=mcmc_state.build_batch(fixed_params),
                                                                   func_state=clipping_state)

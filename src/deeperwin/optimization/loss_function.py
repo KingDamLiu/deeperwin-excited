@@ -42,7 +42,7 @@ def _clip_energies(E, clipping_state, clipping_config: ClippingConfig):
     new_clipping_state = _update_clipping_state(clipped_energies, clipping_state, clipping_config)
     return clipped_energies, new_clipping_state
 
-def build_value_and_grad_func(log_psi_sqr_func, clipping_config: ClippingConfig):
+def build_value_and_grad_func(log_psi_sqr_func, clipping_config: ClippingConfig, phys_config):
     """
     Returns a callable that computes the gradient of the mean local energy for a given set of MCMC walkers with respect to the model defined by `log_psi_func`.
 
@@ -54,8 +54,10 @@ def build_value_and_grad_func(log_psi_sqr_func, clipping_config: ClippingConfig)
     """
 
     # Build custom total energy jvp. Based on https://github.com/deepmind/ferminet/blob/jax/ferminet/train.py
-    @functools.partial(jax.custom_jvp, nondiff_argnums=(2,))
-    def total_energy(params, state, spin_state, batch):
+    spin_state = (phys_config.n_up, phys_config.n_dn)
+    # @functools.partial(jax.custom_jvp, nondiff_argnums=(2,))
+    @jax.custom_jvp
+    def total_energy(params, state, batch):
         # TODO: why is spin state no integer anymore here now??
         clipping_state = state 
         E_loc = get_local_energy(log_psi_sqr_func, params, spin_state, *batch)
@@ -74,12 +76,12 @@ def build_value_and_grad_func(log_psi_sqr_func, clipping_config: ClippingConfig)
         return loss, (clipping_state, aux)
 
     @total_energy.defjvp
-    def total_energy_jvp(spin_state, primals, tangents):
+    def total_energy_jvp(primals, tangents):
         params, state, batch = primals
         r, R, Z, fixed_params = batch
         batch_size = batch[0].shape[0]
 
-        loss, (state, stats) = total_energy(params, state, spin_state, batch)
+        loss, (state, stats) = total_energy(params, state, batch)
         diff = stats["E_loc_clipped"] - stats["E_mean_clipped"]
 
         def func(params):

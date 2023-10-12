@@ -491,6 +491,7 @@ def get_baseline_solution(physical_config: PhysicalConfig, casscf_config: CASSCF
 
         mo_coeff = list(casscf.mo_coeff)  # tuple of spin_up, spin_down
         ind_orbitals = _get_orbital_indices(casscf)
+        mo_energies = hf.mo_energy
         ci_weights = casscf.ci.flatten()
 
         logger.debug(f"Total nuber of CASSCF-determinants before truncation: {len(ci_weights)}")
