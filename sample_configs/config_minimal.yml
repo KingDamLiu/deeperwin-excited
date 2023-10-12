@@ -1,0 +1,33 @@
+physical:
+  R: [[0,0,0]]
+  Z: [4]
+  n_electrons: 4
+  n_up: 2
+
+pre_training:
+  use: true
+  n_epochs: 0
+  baseline:
+    basis_set: default:6-31G__H:6-31G**
+
+optimization:
+  mcmc:
+    n_walkers: 2048
+  n_epochs: 10000
+
+evaluation:
+  n_epochs: 0
+
+model:
+  orbitals:
+    n_determinants: 16
+  name: dpe1
+
+logging:
+  tags: []
+  log_opt_state: true
+  basic:
+    n_skip_epochs: 0
+    log_to_stdout: true
+    log_level: INFO
+    fname: log.out
