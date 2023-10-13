@@ -64,7 +64,8 @@ def process_single_molecule(config_file: str):
     jax config flags have been set (this is considered best practice).
     """
     raw_config, config = Configuration.load_configuration_file(config_file)
-    config.save("full_config.yml")
+    config.logging.save_path = 'experiment_data'
+    config.save(os.path.join(config.logging.save_path, "full_config.yml"))
     root_logger, rng_seed, config, params_to_reuse, fixed_params, mcmc_state, opt_state, clipping_state, phisnet_params_to_reuse = _setup_environment(raw_config, config)
 
     from deeperwin.model import build_log_psi_squared
@@ -105,7 +106,7 @@ def process_single_molecule(config_file: str):
     """ Initialize training loggers """
     use_wandb_group = False
     exp_idx_in_group = None
-    training_loggers: LoggerCollection = initialize_training_loggers(config, params, fixed_params, use_wandb_group, exp_idx_in_group)
+    training_loggers: LoggerCollection = initialize_training_loggers(config, params, fixed_params, use_wandb_group, exp_idx_in_group, config.logging.save_path)
 
     """ STEP 1: Supervised pre-training of wavefunction orbitals """
     if config.pre_training and config.pre_training.n_epochs > 0:

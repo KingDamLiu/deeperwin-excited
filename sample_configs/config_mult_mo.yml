@@ -1,0 +1,25 @@
+physical:
+    name: LiH
+    changes:
+      - R: [[0,0,0],[3.0,0,0]]
+        comment: "Equilibrium bond length"
+      - R: [[0,0,0],[2.8,0,0]]
+        comment: "Compressed molecule"
+      - R: [[0,0,0],[3.2,0,0]]
+        comment: "Stretched molecule"
+optimization:
+    shared_optimization:
+        use: True
+
+model:
+  orbitals:
+    generalized_atomic_orbitals:
+      atom_types: [1, 6, 7, 8]
+      basis_set: "STO-6G"
+      envelope_width: 128
+      backflow_width: 256
+      orb_feature_gnn:
+        n_iterations: 2
+      phisnet_model:
+
+# deeperwin run-multiple-shared sample_configs/config_mult_mo.yml

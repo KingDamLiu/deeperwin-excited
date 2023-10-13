@@ -1690,6 +1690,8 @@ class LoggingConfig(ConfigBaseclass):
     log_opt_state: bool = True
     """Flag whether to log the full state of the optimizer. Note that this can produce very large output-files, in particular when logging the hessian of 2nd-order-optimizers"""
 
+    save_path: Optional[str] = '.'
+
     basic: Optional[BasicLoggerConfig] = BasicLoggerConfig()
     """Config for basic logger, which will produce human-readable log-files using the python built-in logging module"""
 

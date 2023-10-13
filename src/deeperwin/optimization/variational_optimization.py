@@ -95,7 +95,7 @@ def optimize_wavefunction(
                 (params, fixed_params, opt_state, clipping_state))
             mcmc_state_merged = mcmc_state.merge_devices()
             logger.log_checkpoint(n_epoch, params_merged, fixed_params_merged, mcmc_state_merged, opt_state_merged, clipping_state_merged)
-            delete_obsolete_checkpoints(n_epoch, opt_config.checkpoints)
+            delete_obsolete_checkpoints(n_epoch, opt_config.checkpoints, directory=logger.save_path)
 
         if n_epoch in eval_checkpoints:
             LOGGER.debug(f"opt epoch {n_epoch:5d}: Running intermediate evaluation...")
