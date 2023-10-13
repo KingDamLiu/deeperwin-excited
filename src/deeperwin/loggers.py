@@ -17,6 +17,7 @@ from deeperwin.configuration import LoggingConfig, BasicLoggerConfig, LoggerBase
     WandBConfig, Configuration
 from deeperwin.checkpoints import save_run, RunData
 from deeperwin.utils.utils import without_cache
+import pandas as pd
 
 
 def build_dpe_root_logger(config: BasicLoggerConfig):
@@ -403,6 +404,7 @@ class WavefunctionLogger:
         self.history = {}
         self._time = time.time()
         self._mcmc_state_old = None
+        self.train_stats_file_name = os.path.join(loggers.save_path, 'train_stats.csv')
 
     def smooth(self, key, value):
         if key not in self.history:
@@ -464,6 +466,13 @@ class WavefunctionLogger:
 
         if epoch is None:
             epoch = self.n_step
+
+        if self.n_step>0 and os.path.exists(self.train_stats_file_name):
+            df = pd.DataFrame(metrics, index=[0])
+            df.to_csv(self.train_stats_file_name, mode='a', header=False)
+        elif self.n_step == 0:
+            df = pd.DataFrame(metrics, index=[0])
+            df.to_csv(self.train_stats_file_name, header=True, mode = 'w')
 
         self.loggers.log_metrics(metrics, 
                                  epoch=epoch,

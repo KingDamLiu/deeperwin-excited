@@ -1,11 +1,11 @@
 experiment_name: dpe
 physical:
   R: [[0,0,0]]
-  Z: [5]
-  n_electrons: 5
+  Z: [4]
+  n_electrons: 4
   n_cas_electrons: 3
   n_cas_orbitals: 2
-  n_up: 3
+  n_up: 2
 
 pre_training:
   use: true
@@ -16,10 +16,10 @@ pre_training:
 optimization:
   mcmc:
     n_walkers: 2048
-  n_epochs: 10
+  n_epochs: 10000
   checkpoints:
-    replace_every_n_epochs: 2
-    keep_every_n_epochs: 5
+    replace_every_n_epochs: 10000
+    keep_every_n_epochs: 1000
 
 evaluation:
   n_epochs: 0
@@ -27,13 +27,32 @@ evaluation:
 model:
   orbitals:
     n_determinants: 2
-  name: dpe4 # paulinet必须要casscf组态个数与n_determinants相等
+  name: ferminet # paulinet必须要casscf组态个数与n_determinants相等(dpe1)
 
 logging:
   tags: []
   log_opt_state: true
+  save_path: '.'
   basic:
-    n_skip_epochs: 0
+    n_skip_epochs: 10
     log_to_stdout: true
     log_level: INFO
     fname: log.out
+
+reuse:
+  mode: reuse
+  path: ''
+  reuse_config: false
+  reuse_opt_state: false
+  reuse_mcmc_state: false
+  randomize_mcmc_rng: false
+  reuse_clipping_state: true
+  reuse_trainable_params: true
+  reuse_fixed_params: true
+  reuse_modules:
+  continue_n_epochs: false
+  skip_burn_in: false
+  skip_pretraining: false
+  ignore_extra_settings: false
+  check_param_count: true
+  reuse_ema_trainable_params: false

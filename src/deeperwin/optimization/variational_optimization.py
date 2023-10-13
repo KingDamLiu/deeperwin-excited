@@ -4,6 +4,8 @@ import jax.numpy as jnp
 from typing import List, Dict, Tuple, Optional, Any, Callable
 import numpy as np
 
+import os
+
 from deeperwin.configuration import Configuration, OptimizationConfig, EvaluationConfig, PhysicalConfig
 from deeperwin.optimization.evaluation import evaluate_wavefunction
 from deeperwin.geometries import GeometryDataStore, distort_geometry
@@ -16,9 +18,135 @@ from deeperwin.optimizers import build_optimizer
 from deeperwin.utils.utils import replicate_across_devices, get_from_devices, get_next_geometry_index
 from deeperwin.model import init_model_fixed_params
 
-
 LOGGER = logging.getLogger("dpe")
 
+def optimize_multi_wavefunction(
+        log_psi_squareds,
+        psis,
+        cache_funcs,
+        paramses,
+        fixed_paramses,
+        mcmc_states: MCMCState,
+        opt_config: OptimizationConfig,
+        phys_config: PhysicalConfig,
+        rng_seed: int,
+        logger: DataLogger = None,
+        initial_opt_state=None,
+        initial_clipping_states=None,
+):
+    """
+    Minimizes the energy of the wavefunction defined by the callable `log_psi_squared` by adjusting the trainable parameters.
+
+    Args:
+        log_psi_func (callable): A function representing the wavefunction model
+        params (dict): Trainable paramters of the model defined by `log_psi_func`
+        fixed_params (dict): Fixed paramters of the model defined by `log_psi_func`
+        mcmc (MetropolisHastingsMonteCarlo): Object that implements the MCMC algorithm
+        mcmc_state (MCMCState): Initial state of the MCMC walkers
+        opt_config (OptimizationConfig): Optimization hyperparameters
+        checkpoints (dict): Dictionary with items of the form {n_epochs: path}. A checkpoint is saved for each item after optimization epoch n_epochs in the folder path.
+        logger (DataLogger): A logger that is used to log information about the optimization process
+        log_config (LoggingConfig): Logging configuration for checkpoints
+
+    Returns:
+        A tuple (mcmc_state, trainable_paramters, opt_state), where mcmc_state is the final MCMC state and trainable_parameters contains the optimized parameters.
+
+    """
+    LOGGER.debug("Starting optimize_wavefunction")
+
+    # Run burn-in of monte carlo chain
+    LOGGER.debug(f"Starting burn-in for optimization: {opt_config.mcmc.n_burn_in} steps")
+
+    clipping_states = initial_clipping_states
+    spin_states = [(0,0)]*len(log_psi_squareds)
+    rng_opts = [0]*len(log_psi_squareds)
+
+    for i in range(len(log_psi_squareds)):
+        rng_mcmc, rng_opt = jax.random.split(jax.random.PRNGKey(rng_seed), 2)
+        mcmc = MetropolisHastingsMonteCarlo(opt_config.mcmc)
+        mcmc_states[i] = MCMCState.resize_or_init(mcmc_states[i], opt_config.mcmc.n_walkers, phys_config, opt_config.mcmc.initialization, rng_mcmc)
+
+        if opt_config.init_clipping_with_None:
+            clipping_states[i] = (None, None)
+        else:
+            clipping_states[i] = initial_clipping_states[i] or init_clipping_state() # do not clip at first epoch, then adjust
+
+        spin_states[i] = (phys_config.n_up, phys_config.n_dn)
+        paramses[i], fixed_paramses[i], initial_opt_state, clipping_states[i], rng_opt = replicate_across_devices(
+            (paramses[i], fixed_paramses[i], initial_opt_state, clipping_states[i], rng_opt))
+
+        mcmc_states[i], fixed_paramses[i] = _run_mcmc_with_cache(log_psi_squareds[i], cache_funcs[i], mcmc, paramses[i], spin_states[i], mcmc_states[i],
+                                                        fixed_paramses[i], split_mcmc=True, merge_mcmc=False, mode="burnin")
+        rng_opts[i] = rng_opt
+
+    # Initialize loss and optimizer
+    optimizer = build_optimizer(value_and_grad_func=build_value_and_grad_func(log_psi_squareds, psis, opt_config.clipping, phys_config), 
+                                opt_config=opt_config.optimizer, 
+                                value_func_has_aux=True, 
+                                value_func_has_state=True,
+                                log_psi_squared_func=log_psi_squareds)
+    batchs = [mcmc_states[i].build_batch(fixed_paramses[i]) for i in range(len(log_psi_squareds))]
+    opt_state = initial_opt_state or optimizer.init(params=paramses, 
+                                                    rng=rng_opt, 
+                                                    batch=batchs,
+                                                    # static_args=spin_state, 
+                                                    func_state=clipping_states)
+
+    # Set-up check-points
+    eval_checkpoints = set(opt_config.intermediate_eval.opt_epochs) if opt_config.intermediate_eval else set()
+
+    wf_logger = WavefunctionLogger(logger, prefix="opt", n_step=opt_config.n_epochs_prev, smoothing=0.05)
+    for n_epoch in range(opt_config.n_epochs_prev, opt_config.n_epochs_prev+opt_config.n_epochs+1):
+        # 保存第一个模型
+        if is_checkpoint_required(n_epoch, opt_config.checkpoints) and (logger is not None):
+            LOGGER.debug(f"Saving checkpoint n_epoch={n_epoch}")
+            params_merged, fixed_params_merged, opt_state_merged, clipping_state_merged = get_from_devices(
+                (paramses[0], fixed_paramses[0], opt_state, clipping_states[0]))
+            mcmc_state_merged = mcmc_states[0].merge_devices()
+            logger.log_checkpoint(n_epoch, params_merged, fixed_params_merged, mcmc_state_merged, opt_state_merged, clipping_state_merged)
+            delete_obsolete_checkpoints(n_epoch, opt_config.checkpoints, directory=logger.save_path)
+
+        if n_epoch == (opt_config.n_epochs_prev + opt_config.n_epochs):
+            break
+
+        # 蒙特卡洛采样
+        for i in range(len(log_psi_squareds)):
+            mcmc_states[i], fixed_paramses[i] = _run_mcmc_with_cache(log_psi_squareds[i], cache_funcs[i], mcmc, paramses[i], spin_states[i],
+                                                            mcmc_states[i],
+                                                            fixed_paramses[i], split_mcmc=False, merge_mcmc=False,
+                                                            mode="intersteps")
+
+        batchs = [mcmc_states[i].build_batch(fixed_paramses[i]) for i in range(len(log_psi_squareds))]
+        paramses, opt_state, clipping_states, stats = optimizer.step(params=paramses,
+                                                                  state=opt_state,
+                                                                #   static_args=spin_state,
+                                                                  rng=rng_opt,
+                                                                  batch=batchs,
+                                                                  func_state=clipping_states)
+        mcmc_state_merged = mcmc_states[0].merge_devices()
+
+        metrics = {k: float(v[0]) for k,v in stats['aux'].items() if not k.startswith('E_loc') and not k.startswith('psis') and not k.startswith('S')}
+        for si, s in zip(range(len(stats['aux']['S'])), stats['aux']['S']):
+            metrics['S_'+str(si)] = np.asarray(s[0])
+
+        wf_logger.log_step(metrics,
+                           E_ref=phys_config.E_ref,
+                           mcmc_state=mcmc_state_merged,
+                           opt_stats=get_from_devices(stats))
+
+        if opt_config.stop_on_nan:
+            E = metrics.get('E_mean', 0.0)
+            if not np.isfinite(E):
+                LOGGER.warning(f"opt epoch {n_epoch:5d}: Hit non-finite optimization energy opt_E_mean={E}. Dumping checkpoint.")
+                params_merged, fixed_params_merged, opt_state_merged, clipping_state_merged = get_from_devices(
+                    (paramses[0], fixed_paramses[0], opt_state, clipping_states[0]))
+                logger.log_checkpoint(n_epoch, params_merged, fixed_params_merged, mcmc_state_merged, opt_state_merged,
+                                      clipping_state_merged)
+                raise ValueError("Aborting due to nan-energy")
+
+    LOGGER.debug("Finished wavefunction optimization...")
+    params, opt_state, clipping_state = get_from_devices((paramses[0], opt_state, clipping_states[0]))
+    return mcmc_states[0], params, opt_state, clipping_state
 
 def optimize_wavefunction(
         log_psi_squared,

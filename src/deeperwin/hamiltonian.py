@@ -53,7 +53,7 @@ def get_kinetic_energy(log_psi_squared, trainable_params, spin_state, r, R, Z, f
 def get_local_energy(log_psi_squared, trainable_params, spin_state, r, R, Z, fixed_params):
     E_kin = get_kinetic_energy(log_psi_squared, trainable_params, spin_state, r, R, Z, fixed_params)
     E_pot = get_potential_energy(r, R, Z)
-    return E_kin + E_pot
+    return E_kin, E_pot
 
 
 def _calculate_forces_directly(diff_el_ion, d_el_ion, Z, R_cut):
